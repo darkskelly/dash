@@ -1,0 +1,23 @@
+version: '3'
+services:
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - ./jenkins_home:/var/jenkins_home  # Jenkins home directory persistence
+      - /var/run/docker.sock:/var/run/docker.sock  # Access Docker from within Jenkins
+
+  postgres:
+    image: postgres:12
+    environment:
+      POSTGRES_USER: service_account
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: vuln_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Persist PostgreSQL data
+
+volumes:
+  postgres_data:
