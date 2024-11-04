@@ -1,68 +1,73 @@
-import psycopg2
+import pandas as pd
+from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 import json
-import os
-from datetime import datetime
+import configparser
 
-# Get database password from environment variables (set in GitLab CI)
-pg_pass = os.environ.get('PG_PASS')
+# Configuration variables
+configFile = 'dash/config.ini'
+section = 'dash_db'
 
-# Database connection
-try:
-    conn = psycopg2.connect(dbname="vuln_db", user="service_account", password=pg_pass, host="postgres", port="5432", options="-c search_path=public")
-    cursor = conn.cursor()
-    print(f"Data base connected scuessfully")
-except psycopg2.Error as e:
-    print(f"Database connection error: {e}")
-    exit(1)
+# Function to authenticate and create an engine
+def auth(configFile, section):
+    config = configparser.ConfigParser()
+    config.read(configFile)
 
-cursor.execute("SHOW search_path;")
-search_path = cursor.fetchone()[0]
-print(f"Current search path: {search_path}")
+    if section not in config:
+        raise configparser.NoSectionError(section)
 
-# Check if the table exists
-try:
-    cursor.execute("SELECT * FROM repositories LIMIT 1;")
-    print("Table repositories is accessible.")
-except psycopg2.Error as e:
-    print(f"Error accessing table: {e}")
-    conn.close()
-    exit(1)
+    # Retrieve database credentials from config
+    user = config.get(section, 'user')
+    password = config.get(section, 'password')
+    host = config.get(section, 'host')
+    port = config.get(section, 'port')
+    database = config.get(section, 'database')
 
+    connection_url = URL.create(
+        drivername='postgresql',
+        username=user,
+        password=password,
+        host=host,
+        port=port,
+        database=database
+    )
+    engine = create_engine(connection_url, pool_recycle=3600)
+    return engine
 
-# Directory where Trivy results are stored (absolute path)
-scan_output_dir = '/builds/darkskelly/dash/trivy-results'
-
-# Helper function to insert repo into database
-def insert_repo(repo_name):
-    cursor.execute("INSERT INTO repositories (repo_name) VALUES (%s) ON CONFLICT (repo_name) DO NOTHING RETURNING repo_id", (repo_name,))
-    result = cursor.fetchone()
-    if result:
-        return result[0]
-    else:
-        cursor.execute("SELECT repo_id FROM repositories WHERE repo_name = %s", (repo_name,))
-        return cursor.fetchone()[0]
-
-# Parse each Trivy JSON file and insert vulnerabilities into DB
-for file in os.listdir(scan_output_dir):
-    if file.endswith("-trivy-report.json"):
-        repo_name = file.split("-trivy-report")[0]
-        repo_id = insert_repo(repo_name)
-
-        with open(os.path.join(scan_output_dir, file)) as f:
+def load_json(file_path):
+    try:
+        with open(file_path, 'r') as f:
             data = json.load(f)
-            for result in data['Results']:
-                for vuln in result.get('Vulnerabilities', []):
-                    cve_id = vuln['VulnerabilityID']
-                    severity = vuln['Severity']
-                    package_name = vuln['PkgName']
-                    description = vuln.get('Description', 'No description provided')
-                    detected_on = datetime.now()
+        return pd.json_normalize(data)
+    except Exception as e:
+        print(f"Error loading JSON data: {e}")
+        return None
 
-                    cursor.execute("""
-                        INSERT INTO vulnerabilities (repo_id, cve_id, severity, package_name, vulnerability_description, detected_on)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (repo_id, cve_id, severity, package_name, description, detected_on))
+def save_to_postgres(df, table_name, engine):
+    try:
+        df.to_sql(table_name, engine, if_exists='append', index=False)
+        print(f"Data saved to {table_name} table successfully.")
+    except Exception as e:
+        print(f"Error saving to PostgreSQL: {e}")
 
-# Commit the changes and close the connection
-conn.commit()
-conn.close()
+# Main execution
+if __name__ == "__main__":
+    # Authenticate and get engine
+    try:
+        engine = auth(configFile, section)
+    except configparser.NoSectionError as e:
+        print(f"Configuration section '{section}' not found in '{configFile}'.")
+        exit(1)
+
+    # File path to the JSON data and table name
+    json_file_path = 'dash/data.json'
+    table_name = 'vulnerabilities'
+
+    # Load JSON and transform to DataFrame
+    df = load_json(json_file_path)
+
+    # Check if the DataFrame is valid and then save it
+    if df is not None and not df.empty:
+        save_to_postgres(df, table_name, engine)
+    else:
+        print("No data to save.")
