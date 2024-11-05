@@ -10,7 +10,7 @@ services:
   #     - ./jenkins_home:/var/jenkins_home  # Jenkins home directory persistence
   #     - /var/run/docker.sock:/var/run/docker.sock  # Access Docker from within Jenkins
 
-  postgres:
+  dash_postgres:
     image: postgres:12
     environment:
       POSTGRES_USER: service_account
@@ -21,5 +21,24 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data  # Persist PostgreSQL data
 
+
+  trivy:
+    image: aquasec/trivy:latest
+    environment:
+      - TRIVY_NEW_JSON=true
+    volumes:
+      - ./results:/results  # Maps a local folder to store results
+      - ./cloned_repos:/cloned_repos  # Directory to store cloned repositories
+    entrypoint: >
+      sh -c "
+        git clone https://github.com/Hacker-One/vulnerability-assessment-tool.git /cloned_repos/vulnerability-assessment-tool &&
+        git clone https://github.com/vulnerable-apps/django.nV.git /cloned_repos/django.nV &&
+        git clone https://github.com/Contrast-Security-OSS/vulnerable-spring-boot-application.git /cloned_repos/vulnerable-spring-boot-application &&
+        trivy fs --format json --output /results/result1.json /cloned_repos/vulnerability-assessment-tool &&
+        trivy fs --format json --output /results/result2.json /cloned_repos/django.nV &&
+        trivy fs --format json --output /results/result3.json /cloned_repos/vulnerable-spring-boot-application
+      "
 volumes:
   postgres_data:
+
+
