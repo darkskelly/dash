@@ -1,15 +1,26 @@
 version: '3'
 services:
-  # jenkins:
+  #  jenkins:
   #   image: jenkins/jenkins:lts
   #   container_name: jenkins
+  #   user: root
+  #   environment:
+  #     - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+  #   volumes:
+  #     - ./jenkins_home:/var/jenkins_home
+  #     - /var/run/docker.sock:/var/run/docker.sock # Allow Jenkins to run Docker inside container
   #   ports:
   #     - "8080:8080"
-  #     - "50000:50000"
-  #   volumes:
-  #     - ./jenkins_home:/var/jenkins_home  # Jenkins home directory persistence
-  #     - /var/run/docker.sock:/var/run/docker.sock  # Access Docker from within Jenkins
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.jenkins # This will build a custom Jenkins container with dependencies installed.
 
+  #  trivy:
+  #   image: aquasec/trivy:latest
+  #   container_name: trivy
+  #   volumes:
+  #     - ./results:/results # Mount the local directory for results output
+  #   entrypoint: ["sleep", "infinity"]
   dash_postgres:
     image: postgres:12
     environment:
@@ -31,12 +42,13 @@ services:
       - ./cloned_repos:/cloned_repos  # Directory to store cloned repositories
     entrypoint: >
       sh -c "
-        git clone https://github.com/Hacker-One/vulnerability-assessment-tool.git /cloned_repos/vulnerability-assessment-tool &&
-        git clone https://github.com/vulnerable-apps/django.nV.git /cloned_repos/django.nV &&
-        git clone https://github.com/Contrast-Security-OSS/vulnerable-spring-boot-application.git /cloned_repos/vulnerable-spring-boot-application &&
-        trivy fs --format json --output /results/result1.json /cloned_repos/vulnerability-assessment-tool &&
-        trivy fs --format json --output /results/result2.json /cloned_repos/django.nV &&
-        trivy fs --format json --output /results/result3.json /cloned_repos/vulnerable-spring-boot-application
+        [ ! -d /cloned_repos/django.nV ] && git clone https://github.com/vulnerable-apps/django.nV.git /cloned_repos/django.nV;
+        [ ! -d /cloned_repos/dvpwa ] && git clone https://github.com/anxolerd/dvpwa.git /cloned_repos/dvpwa;
+        [ ! -d /cloned_repos/vulnerable-spring-boot-application ] && git clone https://github.com/Contrast-Security-OSS/vulnerable-spring-boot-application.git /cloned_repos/vulnerable-spring-boot-application;
+
+        trivy fs --format json --output /results/djangonV_results.json /cloned_repos/django.nV;
+        trivy fs --format json --output /results/dvpwa_results.json /cloned_repos/dvpwa;
+        trivy fs --format json --output /results/vulnerable-spring-boot-application_results.json /cloned_repos/vulnerable-spring-boot-application
       "
 volumes:
   postgres_data:
