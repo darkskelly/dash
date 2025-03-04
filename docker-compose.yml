@@ -1,26 +1,5 @@
 version: '3'
 services:
-  #  jenkins:
-  #   image: jenkins/jenkins:lts
-  #   container_name: jenkins
-  #   user: root
-  #   environment:
-  #     - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
-  #   volumes:
-  #     - ./jenkins_home:/var/jenkins_home
-  #     - /var/run/docker.sock:/var/run/docker.sock # Allow Jenkins to run Docker inside container
-  #   ports:
-  #     - "8080:8080"
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.jenkins # This will build a custom Jenkins container with dependencies installed.
-
-  #  trivy:
-  #   image: aquasec/trivy:latest
-  #   container_name: trivy
-  #   volumes:
-  #     - ./results:/results # Mount the local directory for results output
-  #   entrypoint: ["sleep", "infinity"]
   dash_postgres:
     image: postgres:12
     environment:
@@ -52,5 +31,4 @@ services:
       "
 volumes:
   postgres_data:
-
 
